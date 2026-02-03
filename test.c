@@ -30,11 +30,11 @@ EstroWord est_main(EstroWord argc,EstroWord argv){
 	x1.un = est_get().un;
 	y.sn= 1;
 	main_bloc_loop:
-	(x1).un= (x[0]).un;
+	x1.un = (unsigned char)*(x.ptr+((EstroWord){.sn = 1})).un;
 	x1.sn = x1.sn - (EstroWord){.sn = 1}.sn;
-	(x[0]).un= x1.un;
+	(*(x.byte_ptr+((EstroWord){.sn = 1}))).un= x1.un;
 	y.sn = y.sn * (EstroWord){.sn = 2}.sn;
-	(x1).un= (x[0]).un;
+	x1.un = (unsigned char)*(x.ptr+((EstroWord){.sn = 1})).un;
 	est_putd((EstroWord){.un = x1.un});
 	if (x1.un) goto main_bloc_loop;else goto main_bloc_end;
 	main_bloc_end:

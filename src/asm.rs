@@ -460,8 +460,8 @@ pub fn transpile_func(
                 }
                 crate::est::EstIn::StoreByte { to, from, offset } => {
                     let op = compile_op_offset(&mut ins, offset, Register::R1);
-                    ins.push(compile_var_load(Register::R2, to.clone(), op));
-                    ins.push(compile_op_load(Register::R0, from.clone(), statics, None));
+                    ins.push(compile_var_load(Register::R0, to.clone(), op));
+                    ins.push(compile_op_load(Register::R2, from.clone(), statics, None));
                     ins.push(AsmIn::Store {
                         to: Register::R0,
                         from: Register::R2,

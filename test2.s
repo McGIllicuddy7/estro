@@ -44,12 +44,13 @@ main_bloc_setup:
 	str x0, [fp, -24]
 	b main_bloc_loop
 main_bloc_loop:
-	;LoadStackAddress {    to: R2,    index: 9,    offset: None,}
+	;StackLoad {    reg: R0,    index: 11,    is_byte: true,    offset: None,}
+	ldrb w0, [fp, -11]
+	;LoadStackAddress {    to: R2,    index: 9,    offset: Some(        Op(            1,        ),    ),}
 	sub x2,fp,9
-	;Load {    to: R0,    from: R2,    offset: None,    is_byte: false,}
-	ldr x0, [x2]
-	;StackStore {    reg: R0,    index: 11,    is_byte: true,    offset: None,}
-	strb w0, [fp, -11]
+	add x2,x2,1
+	;Load {    to: R0,    from: R2,    offset: None,    is_byte: true,}
+	ldrb w0, [x2]
 	;StackLoad {    reg: R1,    index: 11,    is_byte: true,    offset: None,}
 	ldrb w1, [fp, -11]
 	;MoveConst {    to: R2,    value: 1,}
@@ -58,12 +59,13 @@ main_bloc_loop:
 	sub x0,x1,x2
 	;StackStore {    reg: R0,    index: 11,    is_byte: true,    offset: None,}
 	strb w0, [fp, -11]
-	;LoadStackAddress {    to: R2,    index: 9,    offset: None,}
-	sub x2,fp,9
-	;StackLoad {    reg: R0,    index: 11,    is_byte: true,    offset: None,}
-	ldrb w0, [fp, -11]
-	;Store {    to: R2,    from: R0,    offset: None,    is_byte: false,}
-	str x0, [x2]
+	;LoadStackAddress {    to: R0,    index: 9,    offset: Some(        Op(            1,        ),    ),}
+	sub x0,fp,9
+	add x0,x0,1
+	;StackLoad {    reg: R2,    index: 11,    is_byte: true,    offset: None,}
+	ldrb w2, [fp, -11]
+	;Store {    to: R0,    from: R2,    offset: None,    is_byte: true,}
+	strb w2, [x0]
 	;StackLoad {    reg: R1,    index: 24,    is_byte: false,    offset: None,}
 	ldr x1, [fp, -24]
 	;MoveConst {    to: R2,    value: 2,}
@@ -72,12 +74,13 @@ main_bloc_loop:
 	mul x0,x1,x2
 	;StackStore {    reg: R0,    index: 24,    is_byte: false,    offset: None,}
 	str x0, [fp, -24]
-	;LoadStackAddress {    to: R2,    index: 9,    offset: None,}
+	;StackLoad {    reg: R0,    index: 11,    is_byte: true,    offset: None,}
+	ldrb w0, [fp, -11]
+	;LoadStackAddress {    to: R2,    index: 9,    offset: Some(        Op(            1,        ),    ),}
 	sub x2,fp,9
-	;Load {    to: R0,    from: R2,    offset: None,    is_byte: false,}
-	ldr x0, [x2]
-	;StackStore {    reg: R0,    index: 11,    is_byte: true,    offset: None,}
-	strb w0, [fp, -11]
+	add x2,x2,1
+	;Load {    to: R0,    from: R2,    offset: None,    is_byte: true,}
+	ldrb w0, [x2]
 	;StackLoad {    reg: R0,    index: 11,    is_byte: true,    offset: None,}
 	ldrb w0, [fp, -11]
 	;Call {    to_call: "putd",}
