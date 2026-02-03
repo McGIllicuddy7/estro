@@ -46,6 +46,13 @@ pub fn compile_arm(trans: &AsmUnit, file: String) {
                 out += &format!("{}:\n", name);
             }
             for is in &blck.instructions {
+                out += &format!("\t;{:#?}", is)
+                    .lines()
+                    .fold(String::new(), |mut x, y| {
+                        x += y;
+                        x
+                    });
+                out += "\n";
                 match is {
                     crate::asm::AsmIn::StackLoad {
                         reg,
@@ -298,7 +305,7 @@ pub fn compile_arm(trans: &AsmUnit, file: String) {
                         }
                     }
                     crate::asm::AsmIn::LoadStaticAddress { to, name, offset } => {
-                        out += &format!("\tldr {}, ={}\n", to.name_arm(), name);
+                        out += &format!("\tldr {}, {}\n", to.name_arm(), name);
                         if let Some(of) = offset.as_ref() {
                             out += &format!(
                                 "\tadd {},{},{}\n",
@@ -309,7 +316,7 @@ pub fn compile_arm(trans: &AsmUnit, file: String) {
                         }
                     }
                     crate::asm::AsmIn::LoadStackAddress { to, index, offset } => {
-                        out += &format!("\tldr {}, =[fp, -{}]\n", to.name_arm(), index);
+                        out += &format!("\tsub {},fp,{}\n", to.name_arm(), index);
                         if let Some(of) = offset.as_ref() {
                             out += &format!(
                                 "\tadd {},{},{}\n",

@@ -23,20 +23,24 @@ EstroWord est_get(){
 }
 
 EstroWord est_main(EstroWord argc,EstroWord argv){
-	EstroByte x = {};
+	EstroByte x [2] = {};
+	EstroByte x1 = {};
 	EstroWord y = {};
 	main_bloc_setup:
-	x.un = est_get().un;
+	x1.un = est_get().un;
 	y.sn= 1;
 	main_bloc_loop:
-	x.sn = x.sn - (EstroWord){.sn = 1}.sn;
-	est_putd(y);
+	(x1).un= (x[0]).un;
+	x1.sn = x1.sn - (EstroWord){.sn = 1}.sn;
+	(x[0]).un= x1.un;
 	y.sn = y.sn * (EstroWord){.sn = 2}.sn;
-	if (x.un) goto main_bloc_loop;else goto main_bloc_end;
+	(x1).un= (x[0]).un;
+	est_putd((EstroWord){.un = x1.un});
+	if (x1.un) goto main_bloc_loop;else goto main_bloc_end;
 	main_bloc_end:
-	est_putd(y);
-	x.un = est_getc().un;
-	est_putc(x);
+	est_putd((EstroWord){.un = y.un});
+	x1.un = est_getc().un;
+	est_putc((EstroWord){.un = x1.un});
 	return (EstroWord){.un = y.un};
 }
 

@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, os::macos::raw::stat};
+use std::collections::BTreeMap;
 
 use crate::est::{BinOpKind, BinopType, Function, Operand, Static, TranslationUnit, Variable};
 
@@ -202,6 +202,9 @@ pub fn compile_var_load(
     variable: Variable,
     offset: Option<SignedOperand>,
 ) -> AsmIn {
+    if variable.count != 1 {
+        return compile_var_addr_load(register, variable, offset);
+    }
     if variable.is_static {
         AsmIn::StaticLoad {
             to: register,
@@ -215,6 +218,25 @@ pub fn compile_var_load(
             index: variable.stack_offset as u64,
             offset: offset,
             is_byte: variable.is_byte(),
+        }
+    }
+}
+pub fn compile_var_addr_load(
+    register: Register,
+    variable: Variable,
+    offset: Option<SignedOperand>,
+) -> AsmIn {
+    if variable.is_static {
+        AsmIn::LoadStaticAddress {
+            to: register,
+            name: variable.name.clone(),
+            offset: offset,
+        }
+    } else {
+        AsmIn::LoadStackAddress {
+            to: register,
+            index: variable.stack_offset,
+            offset: offset,
         }
     }
 }
@@ -246,25 +268,81 @@ pub fn compile_op_load(
     static_table: &mut BTreeMap<String, Static>,
     offset: Option<SignedOperand>,
 ) -> AsmIn {
-    if op.is_string() {
-        _ = static_table;
-        todo!()
+    if op.is_array() {
+        let name = format!("_imm_const_{}", static_table.len());
+        let stat = match op {
+            Operand::Var(variable) => {
+                return if variable.is_static {
+                    AsmIn::LoadStaticAddress {
+                        to: register,
+                        name: variable.name.clone(),
+                        offset,
+                    }
+                } else {
+                    AsmIn::LoadStackAddress {
+                        to: register,
+                        index: variable.stack_offset as usize,
+                        offset,
+                    }
+                };
+            }
+            Operand::Lit(x) => {
+                let var = Variable {
+                    is_static: true,
+                    stack_offset: 0,
+                    index: static_table.len(),
+                    name: name.clone(),
+                    declared_file: "_".to_string(),
+                    declared_line: 0,
+                    count: x.count(),
+                    kind: x.kind(),
+                };
+                Static {
+                    external: false,
+                    inline: true,
+                    variable: var,
+                    literal: x,
+                }
+            }
+        };
+        static_table.insert(name.clone(), stat);
+        return AsmIn::LoadStaticAddress {
+            to: register,
+            name,
+            offset,
+        };
     }
     match op {
         Operand::Var(variable) => {
-            if variable.is_static {
-                AsmIn::StaticLoad {
-                    to: register,
-                    name: variable.name.clone(),
-                    offset,
-                    is_byte: variable.is_byte(),
+            if variable.count != 1 {
+                if variable.is_static {
+                    AsmIn::LoadStaticAddress {
+                        to: register,
+                        name: variable.name.clone(),
+                        offset,
+                    }
+                } else {
+                    AsmIn::LoadStackAddress {
+                        to: register,
+                        index: variable.stack_offset as usize,
+                        offset,
+                    }
                 }
             } else {
-                AsmIn::StackLoad {
-                    reg: register,
-                    index: variable.stack_offset as u64,
-                    offset,
-                    is_byte: variable.is_byte(),
+                if variable.is_static {
+                    AsmIn::StaticLoad {
+                        to: register,
+                        name: variable.name.clone(),
+                        offset,
+                        is_byte: variable.is_byte(),
+                    }
+                } else {
+                    AsmIn::StackLoad {
+                        reg: register,
+                        index: variable.stack_offset as u64,
+                        offset,
+                        is_byte: variable.is_byte(),
+                    }
                 }
             }
         }
@@ -281,6 +359,9 @@ pub fn compile_op_load(
                         0
                     }
                 }
+                crate::est::Literal::Byte(x) => x as u64,
+                crate::est::Literal::List(_) => todo!(),
+                crate::est::Literal::ByteList(_) => todo!(),
             };
             AsmIn::MoveConst {
                 to: register,
@@ -312,6 +393,9 @@ pub fn compile_op_offset(
                     Some(SignedOperand::Op(0))
                 }
             }
+            crate::est::Literal::Byte(x) => Some(SignedOperand::Op(x as i64)),
+            crate::est::Literal::List(_) => todo!(),
+            crate::est::Literal::ByteList(_) => todo!(),
         },
     }
 }
@@ -354,30 +438,30 @@ pub fn transpile_func(
                 }
                 crate::est::EstIn::Store { to, from, offset } => {
                     let op = compile_op_offset(&mut ins, offset, Register::R1);
-                    ins.push(compile_var_load(Register::R0, to.clone(), op));
-                    ins.push(compile_op_load(Register::R2, from.clone(), statics, None));
+                    ins.push(compile_var_load(Register::R2, to.clone(), op));
+                    ins.push(compile_op_load(Register::R0, from.clone(), statics, None));
                     ins.push(AsmIn::Store {
-                        to: Register::R0,
-                        from: Register::R2,
+                        to: Register::R2,
+                        from: Register::R0,
                         offset: None,
                         is_byte: false,
                     });
                 }
                 crate::est::EstIn::Load { to, from, offset } => {
                     let op = compile_op_offset(&mut ins, offset, Register::R1);
-                    ins.push(compile_var_load(Register::R0, to.clone(), None));
-                    ins.push(compile_var_load(Register::R2, from.clone(), op));
+                    ins.push(compile_var_addr_load(Register::R2, from.clone(), op));
                     ins.push(AsmIn::Load {
                         to: Register::R0,
                         from: Register::R2,
                         offset: None,
                         is_byte: false,
                     });
+                    ins.push(compile_var_store(Register::R0, to.clone(), None));
                 }
                 crate::est::EstIn::StoreByte { to, from, offset } => {
                     let op = compile_op_offset(&mut ins, offset, Register::R1);
-                    ins.push(compile_var_load(Register::R0, to.clone(), op));
-                    ins.push(compile_op_load(Register::R2, from.clone(), statics, None));
+                    ins.push(compile_var_load(Register::R2, to.clone(), op));
+                    ins.push(compile_op_load(Register::R0, from.clone(), statics, None));
                     ins.push(AsmIn::Store {
                         to: Register::R0,
                         from: Register::R2,
@@ -401,13 +485,13 @@ pub fn transpile_func(
                     let op = compile_op_offset(&mut ins, offset, Register::R1);
                     if to.is_static {
                         ins.push(AsmIn::LoadStaticAddress {
-                            to: Register::R0,
+                            to: Register::R2,
                             name: from.name.clone(),
                             offset: op,
                         });
                     } else {
                         ins.push(AsmIn::LoadStackAddress {
-                            to: Register::R0,
+                            to: Register::R2,
                             index: from.index,
                             offset: op,
                         });

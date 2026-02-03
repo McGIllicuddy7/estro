@@ -2,10 +2,12 @@ pub mod arm;
 pub mod asm;
 pub mod est;
 pub mod rtils;
+use std::collections::HashSet;
 fn main() {
     let cmds = est::translate_file(
         std::fs::read_to_string("test.est").unwrap(),
         "test.est".to_string(),
+        &mut HashSet::new(),
     )
     .unwrap();
     println!("{:#?}", cmds);

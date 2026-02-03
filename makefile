@@ -5,8 +5,8 @@ run: test2.s
 	./a.out
 
 c: test.c
-	gcc test.c
+	gcc test.c estro-rt.c
 run-c: test.c
-	gcc test.c
+	gcc test.c estro-rt.c
 	./a.out
 

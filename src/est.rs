@@ -1,7 +1,6 @@
 use crate::rtils::rtils_useful::{Throw, Throws};
 pub use crate::rtils::rtils_useful::{Token, TokenStream, tokenize};
-pub use std::collections::BTreeMap;
-use std::fs;
+pub use std::collections::{BTreeMap, HashSet};
 #[derive(Clone, Debug, Hash, PartialEq, PartialOrd, Ord, Eq)]
 pub enum Type {
     Word,
@@ -24,6 +23,7 @@ pub struct Variable {
     pub declared_file: String,
     pub declared_line: usize,
     pub kind: Type,
+    pub count: usize,
 }
 impl Variable {
     pub fn is_byte(&self) -> bool {
@@ -41,8 +41,75 @@ pub enum Literal {
     UInt(u64),
     Float(f64),
     Bool(bool),
+    Byte(u8),
+    List(Vec<Literal>),
+    ByteList(Vec<Literal>),
 }
 
+impl Literal {
+    pub fn c_fmt(&self) -> String {
+        match self {
+            Literal::Bool(f) => {
+                if *f {
+                    "1".to_string()
+                } else {
+                    "0".to_string()
+                }
+            }
+            Literal::Float(x) => format!("(EstroWord){{.db = {}}}", f64::to_bits(*x)),
+            Literal::Int(x) => format!("(EstroWord){{.sn = {}}}", *x),
+            Literal::String(x) => format!("(EstroWord){{.str = (EstroByte*){}}}", x),
+            Literal::UInt(x) => format!("(EstroWord){{.un = {}}}", x),
+            Literal::Byte(x) => format!("(EstroWord){{.un = {}}}", x),
+            Literal::List(list) => {
+                let mut out = format!("(EstroWord[]){{");
+                for i in 0..list.len() {
+                    out += &list[i].c_fmt();
+                    if i != list.len() - 1 {
+                        out += ","
+                    }
+                }
+                out = format!("(EstroWord){{.ptr = &{}}}", out);
+                out
+            }
+            Literal::ByteList(list) => {
+                let mut out = format!("(EstroByte[]){{");
+                for i in 0..list.len() {
+                    out += &list[i].c_fmt();
+                    if i != list.len() - 1 {
+                        out += ","
+                    }
+                }
+                out = format!("(EstroWord){{.byte_ptr= &{}}}", out);
+                out
+            }
+        }
+    }
+    pub fn count(&self) -> usize {
+        match self {
+            Literal::String(x) => x.len(),
+            Literal::Int(_) => 1,
+            Literal::UInt(_) => 1,
+            Literal::Float(_) => 1,
+            Literal::Bool(_) => 1,
+            Literal::Byte(_) => 1,
+            Literal::List(literals) => literals.len(),
+            Literal::ByteList(literals) => literals.len(),
+        }
+    }
+    pub fn kind(&self) -> Type {
+        match self {
+            Literal::String(_) => Type::Byte,
+            Literal::Int(_) => Type::Word,
+            Literal::UInt(_) => Type::Word,
+            Literal::Float(_) => Type::Word,
+            Literal::Bool(_) => Type::Byte,
+            Literal::Byte(_) => Type::Byte,
+            Literal::List(_) => Type::Word,
+            Literal::ByteList(_) => Type::Byte,
+        }
+    }
+}
 #[derive(Clone, Debug)]
 pub enum Operand {
     Var(Variable),
@@ -58,6 +125,9 @@ impl Operand {
                 Literal::Int(x) => i64::cast_unsigned(*x) < 256,
                 Literal::String(_) => false,
                 Literal::UInt(x) => *x < 256,
+                Literal::Byte(_) => true,
+                Literal::List(_) => false,
+                Literal::ByteList(_) => false,
             },
             Self::Var(v) => match v.kind {
                 Type::Word => false,
@@ -80,6 +150,29 @@ impl Operand {
                 Literal::Int(x) => format!("(EstroWord){{.sn = {}}}", *x),
                 Literal::String(x) => format!("(EstroWord){{.str = (EstroByte*){}}}", x),
                 Literal::UInt(x) => format!("(EstroWord){{.un = {}}}", x),
+                Literal::Byte(x) => format!("(EstroWord){{.un = {}}}", x),
+                Literal::List(list) => {
+                    let mut out = format!("(EstroWord[]){{");
+                    for i in 0..list.len() {
+                        out += &list[i].c_fmt();
+                        if i != list.len() - 1 {
+                            out += ",";
+                        }
+                    }
+                    out = format!("(EstroWord){{.ptr = &{}}}", out);
+                    out
+                }
+                Literal::ByteList(list) => {
+                    let mut out = format!("(EstroByte[]){{");
+                    for i in 0..list.len() {
+                        out += &list[i].c_fmt();
+                        if i != list.len() - 1 {
+                            out += ","
+                        }
+                    }
+                    out = format!("(EstroWord){{.byte_ptr= &{}}}", out);
+                    out
+                }
             },
             Self::Var(v) => {
                 format!("{}", v.name)
@@ -92,15 +185,18 @@ impl Operand {
             Self::Var(_) => false,
         }
     }
-    pub fn is_string(&self) -> bool {
+    pub fn is_array(&self) -> bool {
         match self {
-            Operand::Var(_) => false,
+            Operand::Var(x) => x.count != 1,
             Operand::Lit(literal) => match literal {
                 Literal::String(_) => true,
                 Literal::Int(_) => false,
                 Literal::UInt(_) => false,
                 Literal::Float(_) => false,
                 Literal::Bool(_) => false,
+                Literal::List(_) => true,
+                Literal::Byte(_) => false,
+                Literal::ByteList(_) => true,
             },
         }
     }
@@ -212,7 +308,9 @@ pub struct Function {
 #[derive(Clone, Debug)]
 pub struct Static {
     pub variable: Variable,
-    pub listeral: Literal,
+    pub literal: Literal,
+    pub inline: bool,
+    pub external: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -221,8 +319,85 @@ pub struct TranslationUnit {
     pub functions: BTreeMap<String, Function>,
 }
 
-pub fn parse_static(_is_inline: bool, _stream: &mut TokenStream) -> Throws<(String, Static)> {
-    todo!()
+pub fn parse_static_literal(stream: &mut TokenStream) -> Throws<Literal> {
+    if let Some(t) = stream.peek() {
+        if t.text == "(" {
+            let mut bytes = false;
+            let mut list = Vec::new();
+            let mut x = extract_between_parens(stream)?;
+            if let Some(t) = x.peek() {
+                if t.text == "byte" {
+                    bytes = true;
+                }
+                _ = x.next();
+            }
+            while let Some(_) = x.peek() {
+                list.push(parse_static_literal(&mut x)?);
+            }
+            if bytes {
+                return Ok(Literal::ByteList(list));
+            } else {
+                return Ok(Literal::List(list));
+            }
+        }
+    }
+    let mut minus = 1;
+    let mut t = stream.next().throw()?;
+    if t.as_ref() == "-" {
+        minus = -1;
+        t = stream.next().throw()?;
+    }
+    if t.as_ref().starts_with('"') {
+        let s = t.as_ref().strip_prefix('"').throw()?;
+        let s2 = s.strip_suffix('"').throw()?;
+        Ok(Literal::String(s2.into()))
+    } else if let Ok(x) = t.as_ref().parse::<i64>() {
+        Ok(Literal::Int(x * minus))
+    } else if let Ok(x) = t.as_ref().parse::<u64>() {
+        Ok(Literal::UInt(x))
+    } else if let Ok(x) = t.as_ref().parse::<f64>() {
+        Ok(Literal::Float(x * minus as f64))
+    } else if let Ok(x) = t.as_ref().parse::<bool>() {
+        Ok(Literal::Bool(x))
+    } else {
+        println!("{:#?}", t);
+        todo!()
+    }
+}
+
+pub fn parse_static(
+    is_inline: bool,
+    is_external: bool,
+    stream: &mut TokenStream,
+) -> Throws<(String, Static)> {
+    let var = parse_var_dec(&[], true, stream)?;
+    let name = var.name.clone();
+    if is_external {
+        return Ok((
+            name,
+            Static {
+                variable: var,
+                literal: Literal::UInt(0),
+                inline: is_inline,
+                external: is_external,
+            },
+        ));
+    }
+    let lit = parse_op(&[], &BTreeMap::new(), stream)?;
+    match lit {
+        Operand::Var(_) => todo!(),
+        Operand::Lit(x) => {
+            return Ok((
+                name,
+                Static {
+                    variable: var,
+                    literal: x,
+                    inline: is_inline,
+                    external: is_external,
+                },
+            ));
+        }
+    }
 }
 
 pub fn extract_between_parens(stream: &mut TokenStream) -> Throws<TokenStream> {
@@ -265,14 +440,24 @@ pub fn parse_var_dec(
             todo!()
         }
     };
-    let name = stream.next().throw()?;
+    let mut name = stream.next().throw()?;
+    if is_static {
+        name.text = "est_".to_string() + &name.text;
+    }
+    let mut count = 1;
+    let trys = name.text.strip_prefix("[");
+    if let Some(t) = trys {
+        let t2 = t.strip_suffix("]").throw()?.to_owned();
+        name = stream.next().throw()?;
+        count = t2.parse()?;
+    }
     let mut offset = 0;
     if let Some(l) = current.last() {
         let sz = match ty {
             Type::Word => 8,
             Type::Byte => 1,
         };
-        offset = l.stack_offset + sz;
+        offset = l.stack_offset + sz * l.count;
         if offset % sz != 0 {
             offset += sz - offset % sz;
         }
@@ -285,6 +470,7 @@ pub fn parse_var_dec(
         declared_file: name.file,
         declared_line: name.line,
         kind: ty,
+        count,
     })
 }
 
@@ -424,6 +610,7 @@ pub fn parse_bloc(
             let cmd = cmd_toks.next().throw()?;
             match cmd.as_ref() {
                 "+" | "-" | "*" | "/" | "%" => {
+                    let tk = cmd_toks.peek().throw()?;
                     let binop = if cmd.as_ref() == "+" {
                         BinOpKind::Add
                     } else if cmd.as_ref() == "-" {
@@ -440,6 +627,13 @@ pub fn parse_bloc(
                     let out = parse_var(variables, globals, &mut cmd_toks)?;
                     let left = parse_op(variables, globals, &mut cmd_toks)?;
                     let right = parse_op(variables, globals, &mut cmd_toks)?;
+                    if out.count != 1 || left.is_array() || right.is_array() {
+                        println!(
+                            "error file:{}, line:{}, cannot assign arrays",
+                            tk.file, tk.line
+                        );
+                        todo!()
+                    }
                     let typs = match out.kind {
                         Type::Byte => BinopType::IByte,
                         Type::Word => BinopType::IWord,
@@ -457,6 +651,7 @@ pub fn parse_bloc(
                     });
                 }
                 "+u" | "-u" | "*u" | "/u" | "%u" => {
+                    let tk = cmd_toks.peek().throw()?;
                     let binop = if cmd.as_ref() == "+u" {
                         BinOpKind::Add
                     } else if cmd.as_ref() == "-u" {
@@ -473,6 +668,13 @@ pub fn parse_bloc(
                     let out = parse_var(variables, globals, &mut cmd_toks)?;
                     let left = parse_op(variables, globals, &mut cmd_toks)?;
                     let right = parse_op(variables, globals, &mut cmd_toks)?;
+                    if out.count != 1 || left.is_array() || right.is_array() {
+                        println!(
+                            "error file:{}, line:{}, cannot assign arrays",
+                            tk.file, tk.line
+                        );
+                        todo!()
+                    }
                     let typs = match out.kind {
                         Type::Byte => BinopType::Byte,
                         Type::Word => BinopType::Word,
@@ -490,6 +692,7 @@ pub fn parse_bloc(
                     });
                 }
                 "+f" | "-f" | "*f" | "/f" => {
+                    let tk = cmd_toks.peek().throw()?;
                     let binop = if cmd.as_ref() == "+f" {
                         BinOpKind::Add
                     } else if cmd.as_ref() == "-f" {
@@ -504,6 +707,13 @@ pub fn parse_bloc(
                     let out = parse_var(variables, globals, &mut cmd_toks)?;
                     let left = parse_op(variables, globals, &mut cmd_toks)?;
                     let right = parse_op(variables, globals, &mut cmd_toks)?;
+                    if out.count != 1 || left.is_array() || right.is_array() {
+                        println!(
+                            "error file:{}, line:{}, cannot assign arrays",
+                            tk.file, tk.line
+                        );
+                        todo!()
+                    }
                     let typs = match out.kind {
                         Type::Byte => {
                             todo!()
@@ -527,18 +737,19 @@ pub fn parse_bloc(
                     if cmd_toks.next().is_some() {
                         todo!()
                     }
-                    /*  ins.push(EstInstr {
-                        ins: EstIn::Declare {
-                            declared: v.clone(),
-                        },
-                        line: cmd.line,
-                        file: cmd.file,
-                    });*/
                     variables.push(v);
                 }
                 "=" => {
+                    let tk = cmd_toks.peek().throw()?;
                     let left = parse_var(variables, globals, &mut cmd_toks)?;
                     let right = parse_op(variables, globals, &mut cmd_toks)?;
+                    if left.count != 1 || right.is_array() {
+                        println!(
+                            "error file:{}, line:{}, cannot assign arrays",
+                            tk.file, tk.line
+                        );
+                        todo!()
+                    }
                     ins.push(EstInstr {
                         ins: EstIn::Move {
                             to: left,
@@ -665,6 +876,13 @@ pub fn parse_bloc(
                         let op = parse_op(variables, globals, &mut cmd_toks)?;
                         args.push(op);
                     }
+                    if var.count != 1 {
+                        println!(
+                            "error cannot assign to array file:{}, line:{}",
+                            to_call.file, to_call.line
+                        );
+                        todo!()
+                    }
                     ins.push(EstInstr {
                         ins: EstIn::Call {
                             to_call: to_call.text.to_string(),
@@ -688,8 +906,11 @@ pub fn parse_bloc(
                 }
                 "if" => {
                     let cond = parse_op(variables, globals, &mut cmd_toks)?;
-
                     let gt = cmd_toks.next().throw()?;
+                    if cond.is_array() {
+                        println!("cannot branch on an array:{},line:{}", gt.file, gt.line);
+                        todo!()
+                    }
                     if gt.as_ref() != "goto" {
                         println!("{:#?}", gt);
                         todo!()
@@ -717,7 +938,12 @@ pub fn parse_bloc(
                     if !cmd_toks.peek().is_some() {
                         end = BasicBlocEnd::Return { to_return: None };
                     } else {
+                        let tok = cmd_toks.peek().throw()?;
                         let to_return = parse_op(variables, globals, &mut cmd_toks)?;
+                        if to_return.is_array() {
+                            println!("cannot return an array file:{},line:{}", tok.file, tok.line);
+                            todo!()
+                        }
                         end = BasicBlocEnd::Return {
                             to_return: Some(to_return),
                         }
@@ -736,7 +962,12 @@ pub fn parse_bloc(
     })
 }
 
-pub fn translate_file(text: String, file: String) -> Throws<TranslationUnit> {
+pub fn translate_file(
+    text: String,
+    file: String,
+    reached: &mut HashSet<String>,
+) -> Throws<TranslationUnit> {
+    reached.insert(file.clone());
     let mut stream = TokenStream::from_string(text, file);
     let mut functions = BTreeMap::new();
     let mut statics = BTreeMap::new();
@@ -761,11 +992,38 @@ pub fn translate_file(text: String, file: String) -> Throws<TranslationUnit> {
             }
             functions.insert(name, func);
         } else if tok.as_ref() == "static" {
-            let (name, stat) = parse_static(inline, &mut stream)?;
+            let (name, stat) = parse_static(inline, extrn, &mut stream)?;
             if statics.contains_key(&name) {
                 todo!();
             }
             statics.insert(name, stat);
+        } else if tok.as_ref() == "import" {
+            let file = stream.next().throw()?;
+            let s1 = file.text.strip_prefix("\"").throw()?;
+            let name = s1.strip_suffix("\"").throw()?;
+            if reached.contains(name) {
+                continue;
+            }
+            let f = std::fs::read_to_string(name)?;
+            let tc = translate_file(f, name.to_string(), reached)?;
+            for (name, mut func) in tc.functions {
+                if functions.contains_key(&name) {
+                    continue;
+                }
+                func.external = true;
+                func.blocks.clear();
+                func.variables.clear();
+                functions.insert(name, func);
+            }
+            for (name, mut s) in tc.statics {
+                if statics.contains_key(&name) {
+                    continue;
+                } else {
+                    s.external = true;
+                    s.literal = Literal::UInt(0);
+                }
+                statics.insert(name, s);
+            }
         } else {
             todo!()
         }
@@ -847,9 +1105,18 @@ pub fn tuci(trans: &TranslationUnit, file: String) {
         }
         out += "){\n";
         for i in &func.variables {
-            match i.kind {
-                Type::Word => out += &format!("\tEstroWord {} = {{}};\n", i.name),
-                Type::Byte => out += &format!("\tEstroByte {} = {{}};\n", i.name),
+            if i.count == 1 {
+                match i.kind {
+                    Type::Word => out += &format!("\tEstroWord {} = {{}};\n", i.name),
+                    Type::Byte => out += &format!("\tEstroByte {} = {{}};\n", i.name),
+                }
+            } else {
+                match i.kind {
+                    Type::Word => out += &format!("\tEstroWord {} [{}] = {{}};\n", i.name, i.count),
+                    Type::Byte => {
+                        out += &format!("\tEstroByte {} [{}] = {{}};\n", i.name, i.count);
+                    }
+                }
             }
         }
         let names: Vec<String> = func.blocks.iter().map(|(i, _)| i.to_string()).collect();
@@ -882,33 +1149,61 @@ pub fn tuci(trans: &TranslationUnit, file: String) {
                             Literal::Bool(x) => {
                                 out += &format!("\t{}.sn= {};\n", to.name, x);
                             }
+                            Literal::Byte(x) => {
+                                out += &format!("\t{}.un= {};\n", to.name, x);
+                            }
+                            Literal::List(_) => {
+                                out += &format!("\t{}  = {};\n", to.name, literal.c_fmt());
+                            }
+                            Literal::ByteList(_) => {
+                                out += &format!("\t{}  = {};\n", to.name, literal.c_fmt());
+                            }
                         },
                     },
                     EstIn::Store { to, from, offset } => {
-                        let tn = if let Some(of) = offset {
-                            format!("{}.ptr+({})", to.name, of.c_fmt())
+                        let tn = if to.count != 0 {
+                            if let Some(of) = offset {
+                                format!("{}[{}]", to.name, of.c_fmt())
+                            } else {
+                                format!("{}[0]", to.name)
+                            }
                         } else {
-                            format!("{}.ptr", to.name)
+                            if let Some(of) = offset {
+                                format!("*({}.ptr+({}))", to.name, of.c_fmt())
+                            } else {
+                                format!("*({}.ptr)", to.name)
+                            }
                         };
                         match from {
                             Operand::Var(variable) => {
-                                out += &format!("\t(*({}.ptr)).un= {}.un;\n", tn, variable.name);
+                                out += &format!("\t({}).un= {}.un;\n", tn, variable.name);
                             }
                             Operand::Lit(literal) => match literal {
                                 Literal::String(x) => {
-                                    out += &format!("\t*({}.ptr).str= {};\n", tn, x);
+                                    out += &format!("\t*({}).str= {};\n", tn, x);
                                 }
                                 Literal::Int(x) => {
-                                    out += &format!("\t*({}.ptr).sn= {};\n", tn, x);
+                                    out += &format!("\t*({}).sn= {};\n", tn, x);
                                 }
                                 Literal::UInt(x) => {
-                                    out += &format!("\t*({}.ptr).un= {};\n", tn, x);
+                                    out += &format!("\t*({}).un= {};\n", tn, x);
                                 }
                                 Literal::Float(x) => {
-                                    out += &format!("\t*({}.ptr).db= {};\n", tn, x);
+                                    out += &format!("\t*({}).db= {};\n", tn, x);
                                 }
                                 Literal::Bool(x) => {
-                                    out += &format!("\t*({}.ptr).sn= {};\n", tn, x);
+                                    out += &format!("\t*({}).sn= {};\n", tn, x);
+                                }
+                                Literal::Byte(x) => {
+                                    out += &format!("\t*({}).un= {};\n", to.name, x);
+                                }
+                                Literal::List(_) => {
+                                    out +=
+                                        &format!("\t*({}).ptr  = {};\n", to.name, literal.c_fmt());
+                                }
+                                Literal::ByteList(_) => {
+                                    out +=
+                                        &format!("\t*({}).ptr = {};\n", to.name, literal.c_fmt());
                                 }
                             },
                         }
@@ -941,12 +1236,20 @@ pub fn tuci(trans: &TranslationUnit, file: String) {
                     }
 
                     EstIn::Load { to, from, offset } => {
-                        let tn = if let Some(of) = offset {
-                            format!("{}.ptr+({})", from.name, of.c_fmt())
+                        let tn = if from.count != 0 {
+                            if let Some(of) = offset {
+                                format!("{}[{}]", from.name, of.c_fmt())
+                            } else {
+                                format!("{}[0]", from.name)
+                            }
                         } else {
-                            format!("{}.ptr", from.name)
+                            if let Some(of) = offset {
+                                format!("*({}.ptr+({}))", from.name, of.c_fmt())
+                            } else {
+                                format!("*({}.ptr)", from.name)
+                            }
                         };
-                        out += &format!("\t{}.un= *({}).un;\n", to.name, tn);
+                        out += &format!("\t({}).un= ({}).un;\n", to.name, tn);
                     }
                     EstIn::LoadByte { to, from, offset } => {
                         let tn = if let Some(of) = offset {
@@ -1016,7 +1319,21 @@ pub fn tuci(trans: &TranslationUnit, file: String) {
                         }
                         let mut arg_str = "(".to_string();
                         for i in 0..arguments.len() {
-                            arg_str += &arguments[i].c_fmt();
+                            match tc.args[i].kind {
+                                Type::Byte => {
+                                    arg_str += &format!(
+                                        "(EstroByte){{.un = {}.un}}",
+                                        &arguments[i].c_fmt()
+                                    );
+                                }
+                                Type::Word => {
+                                    arg_str += &format!(
+                                        "(EstroWord){{.un = {}.un}}",
+                                        &arguments[i].c_fmt()
+                                    );
+                                }
+                            }
+
                             if i != arguments.len() - 1 {
                                 arg_str += ",";
                             }
