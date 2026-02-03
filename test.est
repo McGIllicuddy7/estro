@@ -1,19 +1,32 @@
+extern fn none putd(word a)
+extern fn none putc(word a)
+extern fn byte getc()
+
+
 fn word main (word argc word argv)(
-    declarations(
-        (let word x)
-        (=call x gen)
-        (goto base)
-    )
-    base(
-        (+ x x -1)
-        (if x goto base else goto end)
-    )
-    end(
-        (return x)
-    )
+	setup(
+		(let byte x)
+		(let word y)
+		(=call x get)
+		(= y 1)
+		(goto loop)
+	)
+	loop(
+		(- x x 1)
+		(call putd y)
+		(* y y 2)
+		(if x goto loop else goto end)
+	)
+	end(	
+		(call putd y)
+		(=call x getc)
+		(call putc x)
+		(return y)
+    	)
 )
-fn word gen()(
-    end(
-        (return 10)
-    )
+
+fn word get()(
+	start(
+		(return 10)
+	)
 )

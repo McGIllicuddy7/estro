@@ -134,11 +134,23 @@ pub enum EstIn {
         from: Operand,
         offset: Option<Operand>,
     },
+    StoreByte {
+        to: Variable,
+        from: Operand,
+        offset: Option<Operand>,
+    },
+
     Load {
         to: Variable,
         from: Variable,
         offset: Option<Operand>,
     },
+    LoadByte {
+        to: Variable,
+        from: Variable,
+        offset: Option<Operand>,
+    },
+
     LoadAddress {
         to: Variable,
         from: Variable,
@@ -194,6 +206,7 @@ pub struct Function {
     pub returns: Option<Type>,
     pub blocks: Vec<(String, BasicBloc)>,
     pub inline: bool,
+    pub external: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -277,6 +290,7 @@ pub fn parse_var_dec(
 
 pub fn parse_function(
     is_inline: bool,
+    is_extern: bool,
     stream: &mut TokenStream,
     globals: &BTreeMap<String, Static>,
 ) -> Throws<(String, Function)> {
@@ -295,6 +309,20 @@ pub fn parse_function(
     while argx.peek().is_some() {
         let ag = parse_var_dec(&args, false, &mut argx)?;
         args.push(ag);
+    }
+    if is_extern {
+        return Ok((
+            name.text.to_string(),
+            Function {
+                name: name.text.to_string(),
+                args: args,
+                external: true,
+                returns: rt,
+                blocks: Vec::new(),
+                inline: is_inline,
+                variables: Vec::new(),
+            },
+        ));
     }
     let mut bloc_tokens = extract_between_parens(stream)?;
     let mut blocs = Vec::new();
@@ -317,6 +345,7 @@ pub fn parse_function(
         Function {
             name: name.text.to_string(),
             args,
+            external: false,
             returns: rt,
             blocks: blocs,
             inline: is_inline,
@@ -537,16 +566,16 @@ pub fn parse_bloc(
                         file: cmd.file,
                     });
                 }
-                "load" => {
+                "storeb" => {
                     let left = parse_var(variables, globals, &mut cmd_toks)?;
                     let right = parse_op(variables, globals, &mut cmd_toks)?;
-                    let off = if cmd_toks.peek().is_some() {
+                    let off = if let Some(_op) = cmd_toks.peek() {
                         Some(parse_op(variables, globals, &mut cmd_toks)?)
                     } else {
                         None
                     };
                     ins.push(EstInstr {
-                        ins: EstIn::Store {
+                        ins: EstIn::StoreByte {
                             to: left,
                             from: right,
                             offset: off,
@@ -555,6 +584,44 @@ pub fn parse_bloc(
                         file: cmd.file,
                     });
                 }
+
+                "load" => {
+                    let left = parse_var(variables, globals, &mut cmd_toks)?;
+                    let right = parse_var(variables, globals, &mut cmd_toks)?;
+                    let off = if cmd_toks.peek().is_some() {
+                        Some(parse_op(variables, globals, &mut cmd_toks)?)
+                    } else {
+                        None
+                    };
+                    ins.push(EstInstr {
+                        ins: EstIn::Load {
+                            to: left,
+                            from: right,
+                            offset: off,
+                        },
+                        line: cmd.line,
+                        file: cmd.file,
+                    });
+                }
+                "loadb" => {
+                    let left = parse_var(variables, globals, &mut cmd_toks)?;
+                    let right = parse_var(variables, globals, &mut cmd_toks)?;
+                    let off = if cmd_toks.peek().is_some() {
+                        Some(parse_op(variables, globals, &mut cmd_toks)?)
+                    } else {
+                        None
+                    };
+                    ins.push(EstInstr {
+                        ins: EstIn::LoadByte {
+                            to: left,
+                            from: right,
+                            offset: off,
+                        },
+                        line: cmd.line,
+                        file: cmd.file,
+                    });
+                }
+
                 "load&" => {
                     let left = parse_var(variables, globals, &mut cmd_toks)?;
                     let right = parse_var(variables, globals, &mut cmd_toks)?;
@@ -668,11 +735,19 @@ pub fn parse_bloc(
         end,
     })
 }
+
 pub fn translate_file(text: String, file: String) -> Throws<TranslationUnit> {
     let mut stream = TokenStream::from_string(text, file);
     let mut functions = BTreeMap::new();
     let mut statics = BTreeMap::new();
     while let Some(mut tok) = stream.next() {
+        let extrn = if tok.as_ref() == "extern" {
+            tok = stream.next().throw()?;
+            true
+        } else {
+            false
+        };
+
         let inline = if tok.as_ref() == "inline" {
             tok = stream.next().throw()?;
             true
@@ -680,7 +755,7 @@ pub fn translate_file(text: String, file: String) -> Throws<TranslationUnit> {
             false
         };
         if tok.as_ref() == "fn" {
-            let (name, func) = parse_function(inline, &mut stream, &statics)?;
+            let (name, func) = parse_function(inline, extrn, &mut stream, &statics)?;
             if functions.contains_key(&name) {
                 todo!();
             }
@@ -710,10 +785,14 @@ pub fn tuci(trans: &TranslationUnit, file: String) {
     uint64_t un;
     double db;
     union EstroWord * ptr;
+    union EstroByte * byte_ptr;
     union EstroByte * str;
 } EstroWord;\n";
 
     for (name, func) in &trans.functions {
+        if func.external {
+            out += "extern ";
+        }
         if let Some(rt) = func.returns.clone() {
             match rt {
                 Type::Word => {
@@ -739,7 +818,11 @@ pub fn tuci(trans: &TranslationUnit, file: String) {
         out += ");\n";
     }
     out += "\n";
+    let functions = trans.functions.clone();
     for (name, func) in &trans.functions {
+        if func.external {
+            continue;
+        }
         if let Some(rt) = func.returns.clone() {
             match rt {
                 Type::Word => {
@@ -780,7 +863,7 @@ pub fn tuci(trans: &TranslationUnit, file: String) {
                             if variable.is_byte() != to.is_byte() {
                                 out += &format!("\t{}.un = {}.un;\n", to.name, variable.name);
                             } else {
-                                out += &format!("\t{} = {};\n", to.name, variable.name);
+                                out += &format!("\t{}.un= {}.un;\n", to.name, variable.name);
                             }
                         }
                         Operand::Lit(literal) => match literal {
@@ -809,7 +892,7 @@ pub fn tuci(trans: &TranslationUnit, file: String) {
                         };
                         match from {
                             Operand::Var(variable) => {
-                                out += &format!("\t*({}.ptr) = {};\n", tn, variable.name);
+                                out += &format!("\t(*({}.ptr)).un= {}.un;\n", tn, variable.name);
                             }
                             Operand::Lit(literal) => match literal {
                                 Literal::String(x) => {
@@ -830,14 +913,50 @@ pub fn tuci(trans: &TranslationUnit, file: String) {
                             },
                         }
                     }
+                    EstIn::StoreByte { to, from, offset } => {
+                        let tn = if let Some(of) = offset {
+                            format!("{}.byte_ptr+({})", to.name, of.c_fmt())
+                        } else {
+                            format!("{}.byte_ptr", to.name)
+                        };
+                        match from {
+                            Operand::Var(variable) => {
+                                out += &format!("\t(*({})).un= {}.un;\n", tn, variable.name);
+                            }
+                            Operand::Lit(literal) => match literal {
+                                Literal::Int(x) => {
+                                    out += &format!("\t*({}.byte_ptr).sn= {};\n", tn, x);
+                                }
+                                Literal::UInt(x) => {
+                                    out += &format!("\t*({}.byte_ptr).un= {};\n", tn, x);
+                                }
+                                Literal::Bool(x) => {
+                                    out += &format!("\t*({}.byte_ptr).sn= {};\n", tn, x);
+                                }
+                                _ => {
+                                    todo!()
+                                }
+                            },
+                        }
+                    }
+
                     EstIn::Load { to, from, offset } => {
                         let tn = if let Some(of) = offset {
-                            format!("{}.ptr+({})", to.name, of.c_fmt())
+                            format!("{}.ptr+({})", from.name, of.c_fmt())
                         } else {
-                            format!("{}.ptr", to.name)
+                            format!("{}.ptr", from.name)
                         };
-                        out += &format!("\t{} = *({});\n", tn, from.name);
+                        out += &format!("\t{}.un= *({}).un;\n", to.name, tn);
                     }
+                    EstIn::LoadByte { to, from, offset } => {
+                        let tn = if let Some(of) = offset {
+                            format!("{}.ptr+({})", from.name, of.c_fmt())
+                        } else {
+                            format!("{}.ptr", from.name)
+                        };
+                        out += &format!("\t{}.un = (unsigned char)*({}).un;\n", to.name, tn);
+                    }
+
                     EstIn::LoadAddress { to, from, offset } => {
                         let tf = if let Some(of) = offset {
                             format!("(&({})+{}))", from.name, of.c_fmt())
@@ -862,8 +981,8 @@ pub fn tuci(trans: &TranslationUnit, file: String) {
                         };
                         let sz = match types {
                             BinopType::Float => "db",
-                            BinopType::IByte => "ch",
-                            BinopType::Byte => "uc",
+                            BinopType::IByte => "sn",
+                            BinopType::Byte => "un",
                             BinopType::IWord => "sn",
                             BinopType::Word => "un",
                         };
@@ -883,6 +1002,18 @@ pub fn tuci(trans: &TranslationUnit, file: String) {
                         arguments,
                         output,
                     } => {
+                        let Some(tc) = functions.get(to_call) else {
+                            todo!();
+                        };
+                        if tc.args.len() > arguments.len() {
+                            todo!();
+                        }
+                        if arguments.len() > 12 {
+                            todo!()
+                        }
+                        if output.is_some() && tc.returns.is_none() {
+                            todo!();
+                        }
                         let mut arg_str = "(".to_string();
                         for i in 0..arguments.len() {
                             arg_str += &arguments[i].c_fmt();
@@ -892,7 +1023,7 @@ pub fn tuci(trans: &TranslationUnit, file: String) {
                         }
                         arg_str += ")";
                         if let Some(op) = output {
-                            out += &format!("\t{} = est_{}{};\n", op.name, to_call, arg_str);
+                            out += &format!("\t{}.un = est_{}{}.un;\n", op.name, to_call, arg_str);
                         } else {
                             out += &format!("\test_{}{};\n", to_call, arg_str)
                         }
@@ -926,7 +1057,24 @@ pub fn tuci(trans: &TranslationUnit, file: String) {
                 }
                 BasicBlocEnd::Return { to_return } => {
                     if let Some(op) = to_return {
-                        out += &format!("\treturn {};\n", op.c_fmt());
+                        if let Some(rt) = func.returns.clone() {
+                            match rt {
+                                Type::Byte => {
+                                    out += &format!(
+                                        "\treturn (EstroByte){{.un = {}.un}};\n",
+                                        op.c_fmt()
+                                    );
+                                }
+                                Type::Word => {
+                                    out += &format!(
+                                        "\treturn (EstroWord){{.un = {}.un}};\n",
+                                        op.c_fmt()
+                                    );
+                                }
+                            }
+                        } else {
+                            todo!();
+                        }
                     } else {
                         out += "\treturn;\n";
                     }

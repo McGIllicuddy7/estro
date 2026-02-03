@@ -35,12 +35,52 @@ impl Register {
             _ => None,
         }
     }
+    pub fn name_arm(&self) -> &'static str {
+        match self {
+            Self::R0 => "x0",
+            Self::R1 => "x1",
+            Self::R2 => "x2",
+            Self::R3 => "x3",
+            Self::R4 => "x4",
+            Self::R5 => "x5",
+            Self::R6 => "x6",
+            Self::R7 => "x7",
+            Self::R8 => "x8",
+            Self::R9 => "x9",
+            Self::R10 => "x10",
+            Self::R11 => "x11",
+        }
+    }
+    pub fn name_arm_byte(&self) -> &'static str {
+        match self {
+            Self::R0 => "w0",
+            Self::R1 => "w1",
+            Self::R2 => "w2",
+            Self::R3 => "w3",
+            Self::R4 => "w4",
+            Self::R5 => "w5",
+            Self::R6 => "w6",
+            Self::R7 => "w7",
+            Self::R8 => "w8",
+            Self::R9 => "w9",
+            Self::R10 => "w10",
+            Self::R11 => "w11",
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
 pub enum SignedOperand {
     Reg(Register),
     Op(i64),
+}
+impl SignedOperand {
+    pub fn get_arm_name(&self) -> String {
+        match self {
+            Self::Op(x) => format!("{}", x),
+            Self::Reg(x) => format!("{}", x.name_arm()),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -138,6 +178,7 @@ pub struct AsmFunction {
     pub name: String,
     pub variables: Vec<Variable>,
     pub inline: bool,
+    pub external: bool,
     pub blocks: Vec<(String, AsmBasicBlock)>,
 }
 
@@ -282,7 +323,7 @@ pub fn transpile_func(
 ) -> AsmFunction {
     let mut blocks = Vec::new();
     let names: Vec<String> = func.blocks.iter().map(|(i, _)| i.to_string()).collect();
-    {
+    if !func.external {
         let mut ins = Vec::new();
         for i in 0..func.args.len() {
             ins.push(compile_var_store(
@@ -333,6 +374,29 @@ pub fn transpile_func(
                         is_byte: false,
                     });
                 }
+                crate::est::EstIn::StoreByte { to, from, offset } => {
+                    let op = compile_op_offset(&mut ins, offset, Register::R1);
+                    ins.push(compile_var_load(Register::R0, to.clone(), op));
+                    ins.push(compile_op_load(Register::R2, from.clone(), statics, None));
+                    ins.push(AsmIn::Store {
+                        to: Register::R0,
+                        from: Register::R2,
+                        offset: None,
+                        is_byte: true,
+                    });
+                }
+                crate::est::EstIn::LoadByte { to, from, offset } => {
+                    let op = compile_op_offset(&mut ins, offset, Register::R1);
+                    ins.push(compile_var_load(Register::R0, to.clone(), None));
+                    ins.push(compile_var_load(Register::R2, from.clone(), op));
+                    ins.push(AsmIn::Load {
+                        to: Register::R0,
+                        from: Register::R2,
+                        offset: None,
+                        is_byte: true,
+                    });
+                }
+
                 crate::est::EstIn::LoadAddress { to, from, offset } => {
                     let op = compile_op_offset(&mut ins, offset, Register::R1);
                     if to.is_static {
@@ -438,6 +502,7 @@ pub fn transpile_func(
         name: name.into(),
         variables: func.variables.clone(),
         inline: func.inline,
+        external: func.external,
         blocks,
     }
 }
