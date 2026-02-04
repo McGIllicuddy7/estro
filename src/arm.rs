@@ -131,47 +131,47 @@ pub fn compile_arm(trans: &AsmUnit, file: String) {
                     } => {
                         match op {
                             crate::est::BinopType::Float => {
-                                out += &format!("\tfmov s1, {}\n", left.name_arm());
-                                out += &format!("\tfmov s2, {}\n", right.name_arm());
+                                out += &format!("\tfmov d1, {}\n", left.name_arm());
+                                out += &format!("\tfmov d2, {}\n", right.name_arm());
                                 match kind {
                                     crate::est::BinOpKind::Add => {
-                                        out += &format!("\tfadd s0, s1, s2\n");
-                                        out += &format!("\tfmov {}, s0", output.name_arm());
+                                        out += &format!("\tfadd d0, d1, d2\n");
+                                        out += &format!("\tfmov {}, d0", output.name_arm());
                                     }
                                     crate::est::BinOpKind::Sub => {
-                                        out += &format!("\tfsub s0, s1, s2\n");
-                                        out += &format!("\tfmov {}, s0", output.name_arm());
+                                        out += &format!("\tfsub d0, d1, d2\n");
+                                        out += &format!("\tfmov {}, d0", output.name_arm());
                                     }
                                     crate::est::BinOpKind::Div => {
-                                        out += &format!("\tfdiv s0, s1, s2\n");
-                                        out += &format!("\tfmov {}, s0", output.name_arm());
+                                        out += &format!("\tfdiv d0, d1, d2\n");
+                                        out += &format!("\tfmov {}, d0", output.name_arm());
                                     }
                                     crate::est::BinOpKind::Mul => {
-                                        out += &format!("\tfmul s0, s1, s2\n");
-                                        out += &format!("\tfmov {}, s0", output.name_arm());
+                                        out += &format!("\tfmul d0, d1, d2\n");
+                                        out += &format!("\tfmov {}, d0", output.name_arm());
                                     }
                                     crate::est::BinOpKind::Less => {
-                                        out += &format!("\tfcmp,s1, s2\n");
+                                        out += &format!("\tfcmp,d1, d2\n");
                                         out += &format!("\tcset {}, lt", output.name_arm());
                                     }
                                     crate::est::BinOpKind::LessEq => {
-                                        out += &format!("\tfcmp,s1, s2\n");
+                                        out += &format!("\tfcmp,d1, d2\n");
                                         out += &format!("\tcset {}, le", output.name_arm());
                                     }
                                     crate::est::BinOpKind::Eq => {
-                                        out += &format!("\tfcmp,s1, s2\n");
+                                        out += &format!("\tfcmp,d1, d2\n");
                                         out += &format!("\tcset {}, eq", output.name_arm());
                                     }
                                     crate::est::BinOpKind::Neq => {
-                                        out += &format!("\tfcmp,s1, s2\n");
+                                        out += &format!("\tfcmp,d1, d2\n");
                                         out += &format!("\tcset {}, ne", output.name_arm());
                                     }
                                     crate::est::BinOpKind::GreaterEq => {
-                                        out += &format!("\tfcmp,s1, s2\n");
+                                        out += &format!("\tfcmp,d1, d2\n");
                                         out += &format!("\tcset {}, ge", output.name_arm());
                                     }
                                     crate::est::BinOpKind::Greater => {
-                                        out += &format!("\tfcmp,s1, s2\n");
+                                        out += &format!("\tfcmp,d1, d2\n");
                                         out += &format!("\tcset {}, gt", output.name_arm());
                                     }
                                     _ => {

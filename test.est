@@ -3,13 +3,16 @@ import "std.hrt"
 fn word main (word argc word argv)(
 	begin(
 		(let word i)
+		(let word j)
+		(= j 0.0)
 		(let word cmp)
 		(goto loop)
 	)
 	loop(
 		(+ i i 1)
-		(call putd i)
-		(!= cmp i 10)
+		(fadd j j 1.0)
+		(call putf j)
+		(ne cmp i 10)
 		(if cmp goto loop else goto done)
 	)
 	done(

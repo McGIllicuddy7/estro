@@ -16,6 +16,7 @@ extern EstroByte est_getc();
 EstroWord est_main(EstroWord argc,EstroWord argv);
 extern void est_putc(EstroWord a);
 extern void est_putd(EstroWord a);
+extern void est_putf(EstroWord a);
 
 EstroWord est_get(){
 	get_bloc_start:
@@ -24,11 +25,14 @@ EstroWord est_get(){
 
 EstroWord est_main(EstroWord argc,EstroWord argv){
 	EstroWord i = {};
+	EstroWord j = {};
 	EstroWord cmp = {};
 	main_bloc_begin:
+	j.db= 0;
 	main_bloc_loop:
 	i.sn = i.sn + (EstroWord){.sn = 1}.sn;
-	est_putd((EstroWord){.un = i.un});
+	j.db = j.db + (EstroWord){.db = 1}.db;
+	est_putf((EstroWord){.un = j.un});
 	cmp.sn = i.sn != (EstroWord){.sn = 10}.sn;
 	if (cmp.un) goto main_bloc_loop;else goto main_bloc_done;
 	main_bloc_done:

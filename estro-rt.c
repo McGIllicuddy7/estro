@@ -13,4 +13,7 @@ char est_getc(){
 	return getchar();	
 }
 
+void est_putf(double i){
+	printf("%lf\n", i);
+}
 

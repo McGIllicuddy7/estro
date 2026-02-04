@@ -146,7 +146,7 @@ impl Operand {
                         "0".to_string()
                     }
                 }
-                Literal::Float(x) => format!("(EstroWord){{.db = {}}}", f64::to_bits(*x)),
+                Literal::Float(x) => format!("(EstroWord){{.db = {}}}", x),
                 Literal::Int(x) => format!("(EstroWord){{.sn = {}}}", *x),
                 Literal::String(x) => format!("(EstroWord){{.str = (EstroByte*){}}}", x),
                 Literal::UInt(x) => format!("(EstroWord){{.un = {}}}", x),
@@ -626,7 +626,7 @@ pub fn parse_bloc(
         if continues {
             let cmd = cmd_toks.next().throw()?;
             match cmd.as_ref() {
-                "+" | "-" | "*" | "/" | "%" | "==" | "!=" | "<" | "<=" | ">=" | ">" => {
+                "+" | "-" | "*" | "/" | "%" | "eq" | "ne" | "lt" | "le" | "ge" | "gt" => {
                     let tk = cmd_toks.peek().throw()?;
                     let binop = if cmd.as_ref() == "+" {
                         BinOpKind::Add
@@ -638,17 +638,17 @@ pub fn parse_bloc(
                         BinOpKind::Div
                     } else if cmd.as_ref() == "%" {
                         BinOpKind::Rem
-                    } else if cmd.as_ref() == "==" {
+                    } else if cmd.as_ref() == "eq" {
                         BinOpKind::Eq
-                    } else if cmd.as_ref() == "!=" {
+                    } else if cmd.as_ref() == "ne" {
                         BinOpKind::Neq
-                    } else if cmd.as_ref() == "<" {
+                    } else if cmd.as_ref() == "lt" {
                         BinOpKind::Less
-                    } else if cmd.as_ref() == "<=" {
+                    } else if cmd.as_ref() == "le" {
                         BinOpKind::LessEq
-                    } else if cmd.as_ref() == ">=" {
+                    } else if cmd.as_ref() == "ge" {
                         BinOpKind::GreaterEq
-                    } else if cmd.as_ref() == ">" {
+                    } else if cmd.as_ref() == "gt" {
                         BinOpKind::Greater
                     } else {
                         todo!()
@@ -679,29 +679,30 @@ pub fn parse_bloc(
                         file: cmd.file,
                     });
                 }
-                "+u" | "-u" | "*u" | "/u" | "%u" | "==u" | "!=u" | "<u" | "<=u" | ">=u" | ">u" => {
+                "uadd" | "usub" | "umul" | "udiv" | "urem" | "ueq" | "une" | "ult" | "ule"
+                | "uge" | "ugt" => {
                     let tk = cmd_toks.peek().throw()?;
-                    let binop = if cmd.as_ref() == "+u" {
+                    let binop = if cmd.as_ref() == "uadd" {
                         BinOpKind::Add
-                    } else if cmd.as_ref() == "-u" {
+                    } else if cmd.as_ref() == "usub" {
                         BinOpKind::Sub
-                    } else if cmd.as_ref() == "*u" {
+                    } else if cmd.as_ref() == "umul" {
                         BinOpKind::Mul
-                    } else if cmd.as_ref() == "/u" {
+                    } else if cmd.as_ref() == "udiv" {
                         BinOpKind::Div
-                    } else if cmd.as_ref() == "%u" {
+                    } else if cmd.as_ref() == "urem" {
                         BinOpKind::Rem
-                    } else if cmd.as_ref() == "==u" {
+                    } else if cmd.as_ref() == "ueq" {
                         BinOpKind::Eq
-                    } else if cmd.as_ref() == "!=u" {
+                    } else if cmd.as_ref() == "une" {
                         BinOpKind::Neq
-                    } else if cmd.as_ref() == "<u" {
+                    } else if cmd.as_ref() == "ult" {
                         BinOpKind::Less
-                    } else if cmd.as_ref() == "<=u" {
+                    } else if cmd.as_ref() == "ule" {
                         BinOpKind::LessEq
-                    } else if cmd.as_ref() == ">=u" {
+                    } else if cmd.as_ref() == "uge" {
                         BinOpKind::GreaterEq
-                    } else if cmd.as_ref() == ">u" {
+                    } else if cmd.as_ref() == "ugt" {
                         BinOpKind::Greater
                     } else {
                         todo!()
@@ -732,27 +733,28 @@ pub fn parse_bloc(
                         file: cmd.file,
                     });
                 }
-                "+f" | "-f" | "*f" | "/f" | "==f" | "!=f" | "<f" | "<=f" | ">=f" | ">f =>" => {
+                "fadd" | "fsub" | "fmul" | "fdiv" | "feq" | "fne" | "flt" | "fle" | "fge"
+                | "fgt =>" => {
                     let tk = cmd_toks.peek().throw()?;
-                    let binop = if cmd.as_ref() == "+f" {
+                    let binop = if cmd.as_ref() == "fadd" {
                         BinOpKind::Add
-                    } else if cmd.as_ref() == "-f" {
+                    } else if cmd.as_ref() == "fsub" {
                         BinOpKind::Sub
-                    } else if cmd.as_ref() == "*f" {
+                    } else if cmd.as_ref() == "fmul" {
                         BinOpKind::Mul
-                    } else if cmd.as_ref() == "/f" {
+                    } else if cmd.as_ref() == "fdiv" {
                         BinOpKind::Div
-                    } else if cmd.as_ref() == "==f" {
+                    } else if cmd.as_ref() == "feq" {
                         BinOpKind::Eq
-                    } else if cmd.as_ref() == "!=f" {
+                    } else if cmd.as_ref() == "fne" {
                         BinOpKind::Neq
-                    } else if cmd.as_ref() == "<f" {
+                    } else if cmd.as_ref() == "flt" {
                         BinOpKind::Less
-                    } else if cmd.as_ref() == "<=f" {
+                    } else if cmd.as_ref() == "fle" {
                         BinOpKind::LessEq
-                    } else if cmd.as_ref() == ">=f" {
+                    } else if cmd.as_ref() == "fge" {
                         BinOpKind::GreaterEq
-                    } else if cmd.as_ref() == ">f" {
+                    } else if cmd.as_ref() == "fgt" {
                         BinOpKind::Greater
                     } else {
                         todo!()
@@ -947,6 +949,7 @@ pub fn parse_bloc(
                     });
                 }
                 _ => {
+                    println!("{:#?}", cmd);
                     todo!()
                 }
             }
@@ -1078,6 +1081,7 @@ pub fn translate_file(
                 statics.insert(name, s);
             }
         } else {
+            println!("{}", tok.as_ref());
             todo!()
         }
     }
