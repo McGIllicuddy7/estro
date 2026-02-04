@@ -1,28 +1,39 @@
 import "std.hrt"
 
 fn word main (word argc word argv)(
-	begin(
-		(let word i)
-		(let word j)
-		(= j 0.0)
-		(let word cmp)
-		(goto loop)
+	base(
+		(let word fb)
+		(= fb 10)
+		(call putd fb)
+		(=call fb fib fb)
+		(call putd fb)
+		(return 0)
 	)
-	loop(
-		(+ i i 1)
-		(fadd j j 1.0)
-		(call putf j)
-		(ne cmp i 10)
-		(if cmp goto loop else goto done)
-	)
-	done(
-		(return i)
-	)
-
 )
 
 fn word get()(
 	start(
 		(return 10)
+	)
+)
+fn word fib(word x)(
+	start(
+		(let word cmp)
+		(gt cmp x 1)
+		(if cmp goto fx else goto base)
+	)
+	base(
+		(return 1)
+	)
+	fx(
+		(let word out)
+		(let word i1)
+		(let word i2)
+		(- i1 x 1)
+		(- i2 x 2)
+		(=call i1 fib i1)
+		(=call i2 fib i2)
+		(+ out i1 i2)
+		(return out)
 	)
 )

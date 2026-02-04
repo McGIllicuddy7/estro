@@ -43,10 +43,10 @@ pub fn compile_arm(trans: &AsmUnit, file: String) {
         }
         out += &format!("\tmov fp, sp\n");
         out += &format!("\tsub sp,sp, #{}\n", sz);
-        out += &format!("\tmov x0,fp\n");
+        /*    out += &format!("\tmov x0,fp\n");
         out += &format!("\tmov x2,0\n");
         out += &format!("\tmov x3,{}\n", sz);
-        out += &format!("\tbl _memset\n");
+        out += &format!("\tbl _memset\n");*/
         for (name, blck) in &f.blocks {
             if name != "" {
                 out += &format!("{}:\n", name);

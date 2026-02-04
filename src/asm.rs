@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 
-use crate::est::{BinOpKind, BinopType, Function, Operand, Static, TranslationUnit, Variable};
+use crate::est::{
+    BinOpKind, BinopType, Function, Literal, Operand, Static, TranslationUnit, Variable,
+};
 
 #[derive(Clone, Debug)]
 pub enum Register {
@@ -413,6 +415,17 @@ pub fn transpile_func(
             ins.push(compile_var_store(
                 Register::as_index(i).unwrap(),
                 func.args[i].clone(),
+                None,
+            ));
+        }
+        ins.push(AsmIn::MoveConst {
+            to: Register::R0,
+            value: 0,
+        });
+        for i in func.args.len()..func.variables.len() {
+            ins.push(compile_var_store(
+                Register::as_index(0).unwrap(),
+                func.variables[i].clone(),
                 None,
             ));
         }
