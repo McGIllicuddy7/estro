@@ -209,6 +209,12 @@ pub enum BinOpKind {
     Div,
     Mul,
     Rem,
+    Less,
+    LessEq,
+    Eq,
+    Neq,
+    GreaterEq,
+    Greater,
 }
 #[derive(Clone, Debug)]
 pub enum BinopType {
@@ -217,6 +223,17 @@ pub enum BinopType {
     Byte,
     IWord,
     Word,
+}
+impl BinopType {
+    pub fn is_signed(&self) -> bool {
+        match self {
+            BinopType::Float => true,
+            BinopType::IByte => true,
+            BinopType::Byte => false,
+            BinopType::IWord => true,
+            BinopType::Word => false,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -609,7 +626,7 @@ pub fn parse_bloc(
         if continues {
             let cmd = cmd_toks.next().throw()?;
             match cmd.as_ref() {
-                "+" | "-" | "*" | "/" | "%" => {
+                "+" | "-" | "*" | "/" | "%" | "==" | "!=" | "<" | "<=" | ">=" | ">" => {
                     let tk = cmd_toks.peek().throw()?;
                     let binop = if cmd.as_ref() == "+" {
                         BinOpKind::Add
@@ -621,6 +638,18 @@ pub fn parse_bloc(
                         BinOpKind::Div
                     } else if cmd.as_ref() == "%" {
                         BinOpKind::Rem
+                    } else if cmd.as_ref() == "==" {
+                        BinOpKind::Eq
+                    } else if cmd.as_ref() == "!=" {
+                        BinOpKind::Neq
+                    } else if cmd.as_ref() == "<" {
+                        BinOpKind::Less
+                    } else if cmd.as_ref() == "<=" {
+                        BinOpKind::LessEq
+                    } else if cmd.as_ref() == ">=" {
+                        BinOpKind::GreaterEq
+                    } else if cmd.as_ref() == ">" {
+                        BinOpKind::Greater
                     } else {
                         todo!()
                     };
@@ -650,7 +679,7 @@ pub fn parse_bloc(
                         file: cmd.file,
                     });
                 }
-                "+u" | "-u" | "*u" | "/u" | "%u" => {
+                "+u" | "-u" | "*u" | "/u" | "%u" | "==u" | "!=u" | "<u" | "<=u" | ">=u" | ">u" => {
                     let tk = cmd_toks.peek().throw()?;
                     let binop = if cmd.as_ref() == "+u" {
                         BinOpKind::Add
@@ -662,6 +691,18 @@ pub fn parse_bloc(
                         BinOpKind::Div
                     } else if cmd.as_ref() == "%u" {
                         BinOpKind::Rem
+                    } else if cmd.as_ref() == "==u" {
+                        BinOpKind::Eq
+                    } else if cmd.as_ref() == "!=u" {
+                        BinOpKind::Neq
+                    } else if cmd.as_ref() == "<u" {
+                        BinOpKind::Less
+                    } else if cmd.as_ref() == "<=u" {
+                        BinOpKind::LessEq
+                    } else if cmd.as_ref() == ">=u" {
+                        BinOpKind::GreaterEq
+                    } else if cmd.as_ref() == ">u" {
+                        BinOpKind::Greater
                     } else {
                         todo!()
                     };
@@ -691,7 +732,7 @@ pub fn parse_bloc(
                         file: cmd.file,
                     });
                 }
-                "+f" | "-f" | "*f" | "/f" => {
+                "+f" | "-f" | "*f" | "/f" | "==f" | "!=f" | "<f" | "<=f" | ">=f" | ">f =>" => {
                     let tk = cmd_toks.peek().throw()?;
                     let binop = if cmd.as_ref() == "+f" {
                         BinOpKind::Add
@@ -701,6 +742,18 @@ pub fn parse_bloc(
                         BinOpKind::Mul
                     } else if cmd.as_ref() == "/f" {
                         BinOpKind::Div
+                    } else if cmd.as_ref() == "==f" {
+                        BinOpKind::Eq
+                    } else if cmd.as_ref() == "!=f" {
+                        BinOpKind::Neq
+                    } else if cmd.as_ref() == "<f" {
+                        BinOpKind::Less
+                    } else if cmd.as_ref() == "<=f" {
+                        BinOpKind::LessEq
+                    } else if cmd.as_ref() == ">=f" {
+                        BinOpKind::GreaterEq
+                    } else if cmd.as_ref() == ">f" {
+                        BinOpKind::Greater
                     } else {
                         todo!()
                     };
@@ -1163,13 +1216,13 @@ pub fn tuci(trans: &TranslationUnit, file: String) {
                     EstIn::Store { to, from, offset } => {
                         let tn = if to.count != 0 {
                             if let Some(of) = offset {
-                                format!("{}[{}]", to.name, of.c_fmt())
+                                format!("*(EstroWord*)((char*){}+ {}.un)", to.name, of.c_fmt())
                             } else {
                                 format!("{}[0]", to.name)
                             }
                         } else {
                             if let Some(of) = offset {
-                                format!("*({}.ptr+({}))", to.name, of.c_fmt())
+                                format!("*(EstroWord*)((char*)({}.ptr)+{}.un)", to.name, of.c_fmt())
                             } else {
                                 format!("*({}.ptr)", to.name)
                             }
@@ -1180,56 +1233,83 @@ pub fn tuci(trans: &TranslationUnit, file: String) {
                             }
                             Operand::Lit(literal) => match literal {
                                 Literal::String(x) => {
-                                    out += &format!("\t*({}).str= {};\n", tn, x);
+                                    out += &format!("\t({}).str= {};\n", tn, x);
                                 }
                                 Literal::Int(x) => {
-                                    out += &format!("\t*({}).sn= {};\n", tn, x);
+                                    out += &format!("\t({}).sn= {};\n", tn, x);
                                 }
                                 Literal::UInt(x) => {
-                                    out += &format!("\t*({}).un= {};\n", tn, x);
+                                    out += &format!("\t({}).un= {};\n", tn, x);
                                 }
                                 Literal::Float(x) => {
-                                    out += &format!("\t*({}).db= {};\n", tn, x);
+                                    out += &format!("\t({}).db= {};\n", tn, x);
                                 }
                                 Literal::Bool(x) => {
-                                    out += &format!("\t*({}).sn= {};\n", tn, x);
+                                    out += &format!("\t({}).sn= {};\n", tn, x);
                                 }
                                 Literal::Byte(x) => {
-                                    out += &format!("\t*({}).un= {};\n", to.name, x);
+                                    out += &format!("\t({}).un= {};\n", to.name, x);
                                 }
                                 Literal::List(_) => {
                                     out +=
-                                        &format!("\t*({}).ptr  = {};\n", to.name, literal.c_fmt());
+                                        &format!("\t({}).ptr  = {};\n", to.name, literal.c_fmt());
                                 }
                                 Literal::ByteList(_) => {
-                                    out +=
-                                        &format!("\t*({}).ptr = {};\n", to.name, literal.c_fmt());
+                                    out += &format!("\t({}).ptr = {};\n", to.name, literal.c_fmt());
                                 }
                             },
                         }
                     }
                     EstIn::StoreByte { to, from, offset } => {
-                        let tn = if let Some(of) = offset {
-                            format!("{}.byte_ptr+({})", to.name, of.c_fmt())
+                        let tn = if to.count != 0 {
+                            if let Some(of) = offset {
+                                format!("{}[{}.un]", to.name, of.c_fmt())
+                            } else {
+                                format!("{}[0]", to.name)
+                            }
                         } else {
-                            format!("{}.byte_ptr", to.name)
+                            if let Some(of) = offset {
+                                format!("*({}.byte_ptr+({}))", to.name, of.c_fmt())
+                            } else {
+                                format!("*({}.byte_ptr)", to.name)
+                            }
                         };
                         match from {
                             Operand::Var(variable) => {
-                                out += &format!("\t(*({})).un= {}.un;\n", tn, variable.name);
+                                out += &format!("\t({}).un= {}.un;\n", tn, variable.name);
                             }
                             Operand::Lit(literal) => match literal {
+                                Literal::String(x) => {
+                                    out += &format!("\t({}).str= {};\n", tn, x);
+                                }
                                 Literal::Int(x) => {
-                                    out += &format!("\t*({}.byte_ptr).sn= {};\n", tn, x);
+                                    out += &format!("\t({}).sn= {};\n", tn, x);
                                 }
                                 Literal::UInt(x) => {
-                                    out += &format!("\t*({}.byte_ptr).un= {};\n", tn, x);
+                                    out += &format!("\t({}).un= {};\n", tn, x);
+                                }
+                                Literal::Float(x) => {
+                                    out += &format!("\t({}).db= {};\n", tn, x);
                                 }
                                 Literal::Bool(x) => {
-                                    out += &format!("\t*({}.byte_ptr).sn= {};\n", tn, x);
+                                    out += &format!("\t({}).sn= {};\n", tn, x);
                                 }
-                                _ => {
-                                    todo!()
+                                Literal::Byte(x) => {
+                                    out += &format!("\t({}).un= {};\n", to.name, x);
+                                }
+                                Literal::List(_) => {
+                                    out += &format!(
+                                        "\t({}).byte_ptr  = {};\n",
+                                        to.name,
+                                        literal.c_fmt()
+                                    );
+                                }
+                                Literal::ByteList(_) => {
+                                    out += &format!(
+                                        "\t({}).byte_ptr = {};\n",
+                                        to.name,
+                                        literal.c_fmt()
+                                    );
                                 }
                             },
                         }
@@ -1238,26 +1318,39 @@ pub fn tuci(trans: &TranslationUnit, file: String) {
                     EstIn::Load { to, from, offset } => {
                         let tn = if from.count != 0 {
                             if let Some(of) = offset {
-                                format!("{}[{}]", from.name, of.c_fmt())
+                                format!("*(EstroWord*)((char*){}+{}.sn)", from.name, of.c_fmt())
                             } else {
                                 format!("{}[0]", from.name)
                             }
                         } else {
                             if let Some(of) = offset {
-                                format!("*({}.ptr+({}))", from.name, of.c_fmt())
+                                format!(
+                                    "*(EstroWord*)((char*){}.ptr+({}).sn)",
+                                    from.name,
+                                    of.c_fmt()
+                                )
                             } else {
                                 format!("*({}.ptr)", from.name)
                             }
                         };
                         out += &format!("\t({}).un= ({}).un;\n", to.name, tn);
                     }
+
                     EstIn::LoadByte { to, from, offset } => {
-                        let tn = if let Some(of) = offset {
-                            format!("{}.ptr+({})", from.name, of.c_fmt())
+                        let tn = if from.count != 1 {
+                            if let Some(of) = offset {
+                                format!("{}[({}).un]", from.name, of.c_fmt())
+                            } else {
+                                format!("&{}", from.name)
+                            }
                         } else {
-                            format!("{}.ptr", from.name)
+                            if let Some(of) = offset {
+                                format!("{}.byte_ptr+({})", from.name, of.c_fmt())
+                            } else {
+                                format!("{}.byte_ptr", from.name)
+                            }
                         };
-                        out += &format!("\t{}.un = (unsigned char)*({}).un;\n", to.name, tn);
+                        out += &format!("\t{}.un = (unsigned char)({}).un;\n", to.name, tn);
                     }
 
                     EstIn::LoadAddress { to, from, offset } => {
@@ -1281,6 +1374,12 @@ pub fn tuci(trans: &TranslationUnit, file: String) {
                             BinOpKind::Div => "/",
                             BinOpKind::Mul => "*",
                             BinOpKind::Rem => "%",
+                            BinOpKind::Less => "<",
+                            BinOpKind::LessEq => "<=",
+                            BinOpKind::Eq => "==",
+                            BinOpKind::Neq => "!=",
+                            BinOpKind::GreaterEq => ">=",
+                            BinOpKind::Greater => ">",
                         };
                         let sz = match types {
                             BinopType::Float => "db",
@@ -1321,16 +1420,37 @@ pub fn tuci(trans: &TranslationUnit, file: String) {
                         for i in 0..arguments.len() {
                             match tc.args[i].kind {
                                 Type::Byte => {
-                                    arg_str += &format!(
-                                        "(EstroByte){{.un = {}.un}}",
-                                        &arguments[i].c_fmt()
-                                    );
+                                    if arguments[i].is_array() {
+                                        arg_str += &format!(
+                                            "(EstroWord){{.byte_ptr = {}}}",
+                                            &arguments[i].c_fmt()
+                                        );
+                                    } else {
+                                        arg_str += &format!(
+                                            "(EstroByte){{.un = {}.un}}",
+                                            &arguments[i].c_fmt()
+                                        );
+                                    }
                                 }
                                 Type::Word => {
-                                    arg_str += &format!(
-                                        "(EstroWord){{.un = {}.un}}",
-                                        &arguments[i].c_fmt()
-                                    );
+                                    if arguments[i].is_array() {
+                                        if arguments[i].can_be_byte() {
+                                            arg_str += &format!(
+                                                "(EstroWord){{.byte_ptr = {}}}",
+                                                &arguments[i].c_fmt()
+                                            );
+                                        } else {
+                                            arg_str += &format!(
+                                                "(EstroWord){{.ptr = {}}}",
+                                                &arguments[i].c_fmt()
+                                            );
+                                        }
+                                    } else {
+                                        arg_str += &format!(
+                                            "(EstroWord){{.un = {}.un}}",
+                                            &arguments[i].c_fmt()
+                                        );
+                                    }
                                 }
                             }
 

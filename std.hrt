@@ -1,0 +1,3 @@
+extern fn none putd(word a)
+extern fn none putc(word a)
+extern fn byte getc()

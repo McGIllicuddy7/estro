@@ -4,12 +4,18 @@
 .globl _est_main
 .extern _est_putc
 .extern _est_putd
+.extern _memcpy
+.extern _memset
 _est_get:
 	sub sp, sp, #32
 	str lr,[sp, #8]
 	str fp,[sp, #16]
 	mov fp, sp
 	sub sp,sp, #16
+	mov x0,fp
+	mov x2,0
+	mov x3,16
+	bl _memset
 get_bloc_start:
 	;MoveConst {    to: R0,    value: 10,}
 	mov x0, #10
@@ -29,82 +35,46 @@ _est_main:
 	str fp,[sp, #16]
 	mov fp, sp
 	sub sp,sp, #32
+	mov x0,fp
+	mov x2,0
+	mov x3,32
+	bl _memset
 	;StackStore {    reg: R0,    index: 0,    is_byte: false,    offset: None,}
 	str x0, [fp, -0]
 	;StackStore {    reg: R1,    index: 8,    is_byte: false,    offset: None,}
 	str x1, [fp, -8]
-main_bloc_setup:
-	;Call {    to_call: "get",}
-	bl _est_get
-	;StackStore {    reg: R0,    index: 11,    is_byte: true,    offset: None,}
-	strb w0, [fp, -11]
-	;MoveConst {    to: R0,    value: 1,}
-	mov x0, #1
-	;StackStore {    reg: R0,    index: 24,    is_byte: false,    offset: None,}
-	str x0, [fp, -24]
+main_bloc_begin:
 	b main_bloc_loop
 main_bloc_loop:
-	;StackLoad {    reg: R0,    index: 11,    is_byte: true,    offset: None,}
-	ldrb w0, [fp, -11]
-	;LoadStackAddress {    to: R2,    index: 9,    offset: Some(        Op(            1,        ),    ),}
-	sub x2,fp,9
-	add x2,x2,1
-	;Load {    to: R0,    from: R2,    offset: None,    is_byte: true,}
-	ldrb w0, [x2]
-	;StackLoad {    reg: R1,    index: 11,    is_byte: true,    offset: None,}
-	ldrb w1, [fp, -11]
+	;StackLoad {    reg: R1,    index: 16,    is_byte: false,    offset: None,}
+	ldr x1, [fp, -16]
 	;MoveConst {    to: R2,    value: 1,}
 	mov x2, #1
-	;Binop {    op: IByte,    kind: Sub,    left: R1,    right: R2,    output: R0,}
-	sub x0,x1,x2
-	;StackStore {    reg: R0,    index: 11,    is_byte: true,    offset: None,}
-	strb w0, [fp, -11]
-	;LoadStackAddress {    to: R0,    index: 9,    offset: Some(        Op(            1,        ),    ),}
-	sub x0,fp,9
-	add x0,x0,1
-	;StackLoad {    reg: R2,    index: 11,    is_byte: true,    offset: None,}
-	ldrb w2, [fp, -11]
-	;Store {    to: R0,    from: R2,    offset: None,    is_byte: true,}
-	strb w2, [x0]
-	;StackLoad {    reg: R1,    index: 24,    is_byte: false,    offset: None,}
-	ldr x1, [fp, -24]
-	;MoveConst {    to: R2,    value: 2,}
-	mov x2, #2
-	;Binop {    op: IWord,    kind: Mul,    left: R1,    right: R2,    output: R0,}
-	mul x0,x1,x2
+	;Binop {    op: IWord,    kind: Add,    left: R1,    right: R2,    output: R0,}
+	add x0,x1,x2
+	;StackStore {    reg: R0,    index: 16,    is_byte: false,    offset: None,}
+	str x0, [fp, -16]
+	;StackLoad {    reg: R0,    index: 16,    is_byte: false,    offset: None,}
+	ldr x0, [fp, -16]
+	;Call {    to_call: "putd",}
+	bl _est_putd
+	;StackLoad {    reg: R1,    index: 16,    is_byte: false,    offset: None,}
+	ldr x1, [fp, -16]
+	;MoveConst {    to: R2,    value: 10,}
+	mov x2, #10
+	;Binop {    op: IWord,    kind: Neq,    left: R1,    right: R2,    output: R0,}
+	cmp x1, x2
+	cset x0, ne
 	;StackStore {    reg: R0,    index: 24,    is_byte: false,    offset: None,}
 	str x0, [fp, -24]
-	;StackLoad {    reg: R0,    index: 11,    is_byte: true,    offset: None,}
-	ldrb w0, [fp, -11]
-	;LoadStackAddress {    to: R2,    index: 9,    offset: Some(        Op(            1,        ),    ),}
-	sub x2,fp,9
-	add x2,x2,1
-	;Load {    to: R0,    from: R2,    offset: None,    is_byte: true,}
-	ldrb w0, [x2]
-	;StackLoad {    reg: R0,    index: 11,    is_byte: true,    offset: None,}
-	ldrb w0, [fp, -11]
-	;Call {    to_call: "putd",}
-	bl _est_putd
-	;StackLoad {    reg: R0,    index: 11,    is_byte: true,    offset: None,}
-	ldrb w0, [fp, -11]
+	;StackLoad {    reg: R0,    index: 24,    is_byte: false,    offset: None,}
+	ldr x0, [fp, -24]
 	cmp x0, #0
 	bne main_bloc_loop
-	beq main_bloc_end
-main_bloc_end:
-	;StackLoad {    reg: R0,    index: 24,    is_byte: false,    offset: None,}
-	ldr x0, [fp, -24]
-	;Call {    to_call: "putd",}
-	bl _est_putd
-	;Call {    to_call: "getc",}
-	bl _est_getc
-	;StackStore {    reg: R0,    index: 11,    is_byte: true,    offset: None,}
-	strb w0, [fp, -11]
-	;StackLoad {    reg: R0,    index: 11,    is_byte: true,    offset: None,}
-	ldrb w0, [fp, -11]
-	;Call {    to_call: "putc",}
-	bl _est_putc
-	;StackLoad {    reg: R0,    index: 24,    is_byte: false,    offset: None,}
-	ldr x0, [fp, -24]
+	beq main_bloc_done
+main_bloc_done:
+	;StackLoad {    reg: R0,    index: 16,    is_byte: false,    offset: None,}
+	ldr x0, [fp, -16]
 	mov sp, fp
 	ldr lr,[sp, #8]
 	ldr fp,[sp, #16]
