@@ -2,6 +2,7 @@ pub mod arm;
 pub mod asm;
 pub mod est;
 pub mod rtils;
+pub mod x86;
 use std::collections::HashSet;
 fn main() {
     let cmds = est::translate_file(
