@@ -289,7 +289,7 @@ pub fn compile_arm(trans: &AsmUnit, file: String) {
                         out += &format!("\tmov {}, #{}\n", to.name_arm(), value);
                     }
                     crate::asm::AsmIn::Move { to, from } => {
-                        out += &format!("\tldr {} {}\n", to.name_arm(), from.name_arm());
+                        out += &format!("\tmov {} {}\n", to.name_arm(), from.name_arm());
                     }
                     crate::asm::AsmIn::StaticLoad {
                         to,

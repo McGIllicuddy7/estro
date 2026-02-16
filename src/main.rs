@@ -14,6 +14,6 @@ fn main() {
     println!("{:#?}", cmds);
     est::tuci(&cmds, "test.c".to_string());
     let asm = asm::transpile(&cmds);
-    arm::compile_arm(&asm, "test2.s".to_string());
+    x86::compile_x86(&asm, "test2.s".to_string());
     println!("{:#?}", &asm);
 }

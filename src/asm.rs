@@ -69,6 +69,38 @@ impl Register {
             Self::R11 => "w11",
         }
     }
+    pub fn name_x86(&self) -> &'static str {
+        match self {
+            Self::R0 => "rdi",
+            Self::R1 => "rsi",
+            Self::R2 => "rdx",
+            Self::R3 => "rcx",
+            Self::R4 => "r8",
+            Self::R5 => "r9",
+            Self::R6 => "r11",
+            Self::R7 => "r12",
+            Self::R8 => "r13",
+            Self::R9 => "r14",
+            Self::R10 => "rax",
+            Self::R11 => "rbx",
+        }
+    }
+    pub fn name_x86_byte(&self) -> &'static str {
+        match self {
+            Self::R0 => "dil",
+            Self::R1 => "sil",
+            Self::R2 => "dl",
+            Self::R3 => "cl",
+            Self::R4 => "r8b",
+            Self::R5 => "r9b",
+            Self::R6 => "r11b",
+            Self::R7 => "r12b",
+            Self::R8 => "r13b",
+            Self::R9 => "r14b",
+            Self::R10 => "al",
+            Self::R11 => "bl",
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -81,6 +113,12 @@ impl SignedOperand {
         match self {
             Self::Op(x) => format!("{}", x),
             Self::Reg(x) => format!("{}", x.name_arm()),
+        }
+    }
+    pub fn get_x86_name(&self) -> String {
+        match self {
+            Self::Op(x) => format!("{}", x),
+            Self::Reg(x) => format!("{}", x.name_x86()),
         }
     }
 }
